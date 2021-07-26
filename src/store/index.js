@@ -29,6 +29,7 @@ export default new Vuex.Store({
   mutations: {
     setDailyProgressCount(state, payload) {
       state.dailyProgressCount = payload.progressToDate;
+      alert(JSON.stringify(payload));
     },
     incrementProgressCount(state, value) {
       state.dailyProgressCount += value;
@@ -40,11 +41,17 @@ export default new Vuex.Store({
   actions: {
     addRecord: {
       root: true,
-      handler(namespacedContext, value) {
-        axios.post("http://localhost:3001/addRecord", value);
+      handler(state, record) {
+        axios.post("http://localhost:3001/addRecord", record);
         // get random record id
-        const recordId = uuidv4();
-        firebaseDb.ref("records/" + recordId).set(value);
+        record.id = uuidv4();
+        firebaseDb.ref("records/" + record.id).set(record);
+        state.commit("setLastRecord", record);
+      },
+    },
+    updateProgress: {
+      handler(state, record) {
+        firebaseDb.ref("records/" + record.id).update(record);
       },
     },
     setUserProgress: {
@@ -55,21 +62,22 @@ export default new Vuex.Store({
         // });
 
         let records = firebaseDb.ref("records");
-
         var outCount = 0;
         records.once("value", (db) => {
           db.forEach((recordSnap) => {
             let midnightToday = new Date();
             midnightToday.setHours(0, 0, 0, 0);
             // const startOfDayTimestamp = midnightToday.getTime();
-
             let record = recordSnap.val();
-            outCount += record.count;
-
-            // alert(
-            //   startOfDayTimestamp + ", " + JSON.stringify(recordSnap.val())
-            // );
+            if (
+              record.timedate > midnightToday.getTime() &&
+              record.status == "success"
+            ) {
+              alert(JSON.stringify(record));
+              outCount += record.count;
+            }
           });
+          alert("outCount", outCount);
           state.commit("setDailyProgressCount", { progressToDate: outCount });
         });
 
@@ -87,6 +95,13 @@ export default new Vuex.Store({
       handler(state) {
         axios.get("http://localhost:3001/mostRecentRecord").then((response) => {
           state.commit("setLastRecord", response.data);
+        });
+        var lastRecord = firebaseDb
+          .ref("records")
+          .orderByChild("timedate")
+          .limitToLast(1);
+        lastRecord.once("value", (record) => {
+          state.commit("setLastRecord", record.val());
         });
       },
     },
