@@ -1,48 +1,75 @@
 <template>
-  <div id="app" style="width: 700px; display: flex; flex-direction: column; justify-content: center">
-    
-    <div v-if="!active">
-      <h3>What are you working on right now?</h3>
-      <label for="taskdescription" >Description:</label>
-      <input
-        type="text"
-        id="current-task-description"
-        name="taskdescription"
-        autocomplete="off"
-        v-model="taskDescription"
-      />
-      <br />
-      <label for="tasklength" align="left">Time:</label>
-      <input
-        type="text"
-        id="current-task-length"
-        name="tasklength"
-        v-model="taskLength"
-      />
-      <br />
-      <button @click="markTaskStart(taskDescription, taskLength)">Start</button>
-    </div>
-    <div v-if="active" style="align-self: flex-start">
-      <h3>Current task:</h3>
-      <p>{{ taskDescription }}</p>
-      <h4>Task time elapsed/Time left in iteration</h4>
-      <p>{{ taskTimeElapsed }} / {{ taskLength * 60 }}</p>
-      <button @click="trackDistraction">Track Distraction</button>
-      <p>{{ distractionScore }}</p>
-      <button @click="markTaskSuccess">Success</button>
-      <button @click="markTaskFail">Fail</button>
-      <p>Started: {{ startDateTime }}</p>
-      <p>{{ taskTimeElapsed }}</p>
-    </div>
-    <div style="align-self: center">
-      <p>Session Time: {{ sessionTimeElapsed }}</p>
-      <p>Session Progress: {{ culmulativeTaskTime }}</p>
-      <p>Daily Progress Time : {{ dailyProgressCount }}</p>
-    </div>
+  <div style="display: flex;">
+    <div
+      id="app"
+      style="
+        display: flex;
+        flex-direction: column;
+      "
+    >
+      <div v-if="!active">
+        <h3>What are you working on right now?</h3>
+        <label for="taskdescription">Description:</label>
+        <input
+          type="text"
+          id="current-task-description"
+          name="taskdescription"
+          autocomplete="off"
+          v-model="taskDescription"
+        />
+        <br />
+        <label for="tasklength" align="left">Time:</label>
+        <input
+          type="text"
+          id="current-task-length"
+          name="tasklength"
+          v-model="taskLength"
+        />
+        <br />
+        <button @click="markTaskStart(taskDescription, taskLength)">
+          Start
+        </button>
+      </div>
+      <div v-if="active" style="align-self: flex-start">
+        <h3>Current task:</h3>
+        <p>{{ taskDescription }}</p>
+        <h4>Task time elapsed/Time left in iteration</h4>
+        <p>{{ taskTimeElapsed }} / {{ taskLength * 60 }}</p>
+        <button @click="trackDistraction">Track Distraction</button>
+        <p>{{ distractionScore }}</p>
+        <button @click="markTaskSuccess">Success</button>
+        <button @click="markTaskFail">Fail</button>
+        <p>Started: {{ startDateTime }}</p>
+        <p>{{ taskTimeElapsed }}</p>
+      </div>
+      <div style="align-self: center">
+        <p>Session Time: {{ sessionTimeElapsed }}</p>
+        <p>Session Progress: {{ culmulativeTaskTime }}</p>
+        <p>Daily Progress Time : {{ dailyProgressCount }}</p>
+      </div>
 
-    <!-- <button @click="start">Start</button>
+      <!-- <button @click="start">Start</button>
     <button @click="stop">Stop</button>
     <button @click="reset">Reset</button> -->
+    </div>
+    <div
+      style="
+        display: flex;
+        flex-direction: column;
+      "
+    >
+      <table>
+        <tr v-for="record in last10UserRecords" :key="record.id">
+          <td>{{record.name}}</td>
+          <td>{{record.description}}</td>
+          <td>{{record.status}}</td>
+          <td>{{record.count}}</td>
+          <td>{{new Date(record.timedate).toLocaleString()}}</td>
+
+
+        </tr>
+      </table>
+    </div>
   </div>
 </template>
 
@@ -67,8 +94,11 @@ export default {
   },
   methods: {
     noActiveTask: function() {
-      if(this.$store.state.lastUserRecord.status=="started"){
-        alert(this.$store.state.lastUserRecord)
+      if (
+        this.$store.state.lastUserRecord.status == "started" &&
+        this.$store.state.lastUserRecord.timedate < Date().setHours(0, 0, 0, 0)
+      ) {
+        console.log("abandoned task detected");
       }
     },
     startCounting: function() {
@@ -90,7 +120,7 @@ export default {
         sessionTimeElapsed: 0,
         timedate: new Date().getTime(),
         description: this.taskDescription,
-        length: this.taskLength
+        length: this.taskLength,
       });
       this.taskTimer = setInterval(() => {
         this.taskTimeElapsed += 1;
@@ -100,12 +130,13 @@ export default {
       clearInterval(this.taskTimer);
       this.culmulativeTaskTime += this.taskTimeElapsed;
       this.updateProgress({
+        id: this.lastUserRecord.id,
         status: "success",
         count: this.taskTimeElapsed,
         sessionTime: this.sessionTimeElapsed,
         timedate: new Date().getTime(),
         description: this.taskDescription,
-        length: this.taskLength
+        length: this.taskLength,
       });
       this.resetTaskTime();
     },
@@ -116,7 +147,7 @@ export default {
         status: "fail",
         count: this.taskTimeElapsed,
         sessionTime: this.sessionTimeElapsed,
-        timedate: new Date().getTime()
+        timedate: new Date().getTime(),
       });
     },
     resetTaskTime: function() {
@@ -126,10 +157,9 @@ export default {
     track: function(record) {
       this.$store.dispatch("incrementProgress", record.count);
     },
-    updateProgress: function(record){
+    updateProgress: function(record) {
       this.$store.dispatch("updateProgress", record);
     },
-    
   },
   mounted() {
     this.startCounting();
@@ -137,7 +167,7 @@ export default {
   created() {
     this.$store.dispatch("setUserProgress");
     this.$store.dispatch("getLastUserRecord");
-    this.$store.dispatch("updateProgressValues");
+    this.$store.dispatch("getLast10UserRecords");
   },
   computed: {
     dailyProgressCount: {
@@ -148,6 +178,11 @@ export default {
     lastUserRecord: {
       get: function() {
         return this.$store.state.lastUserRecord;
+      },
+    },
+    last10UserRecords: {
+      get: function() {
+        return this.$store.state.last10UserRecords;
       },
     },
   },
@@ -204,4 +239,6 @@ button {
   display: inline-block;
   font-size: 16px;
 }
+
+
 </style>
